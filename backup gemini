@@ -1,0 +1,81 @@
+require('dotenv').config();
+const qrcode = require('qrcode-terminal');
+const { Client } = require('whatsapp-web.js');
+const axios = require('axios');
+
+const client = new Client({
+    puppeteer: {
+        args: ['--no-sandbox'],
+    }
+});
+
+const apiKey = process.env.GOOGLE_AI_STUDIO_API_KEY;
+const modelName = process.env.GOOGLE_AI_STUDIO_MODEL_NAME || "gemini-1.5-pro-latest";
+
+if (!apiKey) {
+    console.error("Erro: API Key não encontrada! Defina GOOGLE_AI_STUDIO_API_KEY no arquivo .env");
+    process.exit(1);
+}
+
+client.on('qr', qr => {
+    qrcode.generate(qr, { small: true });
+    console.log('Por favor, escaneie o código QR com seu celular.');
+});
+
+client.on('ready', () => {
+    console.log('Tudo certo! WhatsApp conectado.');
+});
+
+client.initialize();
+
+const delay = ms => new Promise(res => setTimeout(res, ms));
+
+async function getAiStudioResponse(userInput) {
+    try {
+        const response = await axios.post(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+            {
+                contents: [{ role: "user", parts: [{ text: userInput }] }],
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 1,
+                    topK: 1,
+                    maxOutputTokens: 500,
+                },
+                safetySettings: [
+                    { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+                    { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+                    { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_MEDIUM_AND_ABOVE" },
+                    { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_MEDIUM_AND_ABOVE" }
+                ]
+            },
+            {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        if (response.data.candidates && response.data.candidates.length > 0 && response.data.candidates[0].content && response.data.candidates[0].content.parts && response.data.candidates[0].content.parts.length > 0) {
+            return response.data.candidates[0].content.parts[0].text;
+        } else {
+            console.warn("Resposta inesperada da API:", response.data);
+            return "Desculpe, não consegui entender.";
+        }
+
+    } catch (error) {
+        console.error("Erro ao acessar API do Google AI Studio:", error.response ? error.response.data : error.message);
+        return "Erro na comunicação com o Google AI Studio.";
+    }
+}
+
+client.on('message', async msg => {
+    if (msg.from.endsWith('@c.us')) {
+        const chat = await msg.getChat();
+        await delay(1000);
+        await chat.sendStateTyping();
+        await delay(1000);
+        const aiStudioResponse = await getAiStudioResponse(msg.body);
+        await client.sendMessage(msg.from, aiStudioResponse);
+    }
+});

@@ -1,0 +1,15 @@
+{
+  "name": "seu-projeto",
+  "version": "1.0.0",
+  "description": "Bot do WhatsApp",
+  "main": "chatbot.js",
+  "scripts": {
+    "start": "node chatbot.js"  // <-- Script "start"
+  },
+  "dependencies": {
+    "axios": "^1.6.2",
+    "dotenv": "^16.3.1",
+    "qrcode-terminal": "^0.12.0",
+    "whatsapp-web.js": "^1.23.0"
+  }
+}
